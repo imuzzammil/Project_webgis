@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGIS Pro</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tokml@0.4.0/tokml.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shp-write@0.3.2/shpwrite.js"></script>
+<style>
+:root{--dark:#1F2732;--dark2:#39495E;--red:#E63946;--line:#59687a;--txt:#e8edf3;--mut:#9aa8b8}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Segoe UI,Arial,sans-serif;font-size:13px}
+#map{position:absolute;inset:0 0 28px 0;background:#e8edf2}
+/* top bar */
+#top{position:absolute;top:0;left:0;right:0;height:46px;z-index:1100;background:linear-gradient(135deg,var(--dark),var(--dark2));color:#fff;display:flex;align-items:center;padding:0 14px;gap:10px;border-bottom:2px solid var(--red)}
+#top h1{font-size:16px;margin:0;flex:1}#top h1 span{color:var(--red)}
+.tbtn{background:transparent;color:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600}
+.tbtn:hover,.tbtn.on{background:var(--red);border-color:var(--red)}
+/* sidebar */
+#side{position:absolute;top:46px;right:0;bottom:28px;width:310px;z-index:1050;background:var(--dark);color:var(--txt);display:flex;flex-direction:column;transition:transform .25s;border-left:1px solid var(--red)}
+#side.hide{transform:translateX(100%)}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;color:var(--mut);padding:11px 4px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent}
+.tabs button.on{color:#fff;border-color:var(--red)}
+.pane{display:none;padding:12px;overflow:auto;flex:1}.pane.on{display:block}
+.pane h3{margin:14px 0 8px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
+.pane h3:first-child{margin-top:0}
+.opt{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer}
+.opt:hover{background:var(--dark2)}.opt small{color:var(--mut);margin-left:auto}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:4px 0;padding:9px;background:var(--dark2);color:#fff;border:1px solid var(--line);border-radius:7px;font-weight:600;cursor:pointer}
+.btn:hover,.btn.on{background:var(--red);border-color:var(--red)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid .btn{margin:0}
+input[type=text],input[type=date],select{width:100%;padding:8px;background:var(--dark2);color:#fff;border:1px solid var(--line);border-radius:6px;margin:3px 0}
+input[type=range]{width:100%;accent-color:var(--red)}
+input[type=file]{width:100%;padding:8px;background:var(--dark2);border:1px dashed var(--line);border-radius:6px;color:#fff}
+.row{display:flex;gap:6px}
+.lay{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dark2);border-radius:6px;margin:4px 0}
+.lay span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lay button{background:none;border:0;color:#fff;cursor:pointer;font-size:14px}
+/* status bar */
+#status{position:absolute;left:0;right:0;bottom:0;height:28px;z-index:1100;background:var(--dark);color:var(--txt);display:flex;gap:18px;align-items:center;padding:0 12px;font-size:12px;border-top:1px solid var(--red)}
+#status b{color:var(--red)}
+#toast{position:absolute;left:50%;top:58px;transform:translateX(-50%);z-index:1200;background:var(--dark);color:#fff;border:1px solid var(--red);padding:9px 16px;border-radius:8px;display:none;box-shadow:0 4px 14px #0005;max-width:90vw;text-align:center}
+.leaflet-top.leaflet-left{top:50px}
+.leaflet-control-scale{margin-bottom:34px!important}
+.popup-tbl{border-collapse:collapse;font-size:12px}.popup-tbl td{border:1px solid #ccc;padding:2px 6px}
+@media(max-width:600px){#side{width:100%;top:auto;height:55%}#side.hide{transform:translateY(100%)}}
+</style>
+</head>
+<body>
+<div id="top">
+  <h1>🌍 <span>WebGIS</span> Pro</h1>
+  <button class="tbtn" onclick="map.zoomIn()">＋</button>
+  <button class="tbtn" onclick="map.zoomOut()">－</button>
+  <button class="tbtn" onclick="gpsLocate()">📍 Locate</button>
+  <button class="tbtn" onclick="goHome()">🏠 Home</button>
+  <button class="tbtn" onclick="toggleFS()">⛶ Fullscreen</button>
+  <button class="tbtn on" id="btnSide" onclick="toggleSide()">☰ Panel</button>
+</div>
+<div id="map"></div>
+<div id="toast"></div>
+
+<div id="side">
+  <div class="tabs">
+    <button class="on" data-t="p1">🛰 Layers</button>
+    <button data-t="p2">🛠 Tools</button>
+    <button data-t="p3">📂 Data</button>
+  </div>
+
+  <div class="pane on" id="p1">
+    <h3>Basemap / Satellite imagery</h3>
+    <div id="baseList"></div>
+    <div id="gibsBox" style="display:none">
+      <h3>NASA daily imagery date</h3>
+      <input type="date" id="gibsDate">
+    </div>
+    <h3>Basemap opacity</h3>
+    <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1">
+    <h3>Overlays</h3>
+    <div id="overList"></div>
+  </div>
+
+  <div class="pane" id="p2">
+    <h3>Search place</h3>
+    <div class="row"><input type="text" id="searchIn" placeholder="Search location..." onkeydown="if(event.key==='Enter')searchPlace()">
+    <button class="btn" style="width:60px" onclick="searchPlace()">🔍</button></div>
+    <h3>Draw</h3>
+    <div class="grid">
+      <button class="btn" onclick="startDraw('Polygon')">⬟ Polygon</button>
+      <button class="btn" onclick="startDraw('Polyline')">〰 Line</button>
+      <button class="btn" onclick="startDraw('Rectangle')">▭ Rectangle</button>
+      <button class="btn" onclick="startDraw('Circle')">◯ Circle</button>
+      <button class="btn" onclick="startDraw('Marker')">📌 Marker</button>
+      <button class="btn" id="btnEdit" onclick="toggleEdit()">✏️ Edit</button>
+      <button class="btn" id="btnDel" onclick="toggleDelete()" style="grid-column:span 2">❌ Delete shape</button>
+    </div>
+    <h3>Measure</h3>
+    <div class="grid">
+      <button class="btn" id="mDist" onclick="startMeasure('dist')">📏 Distance</button>
+      <button class="btn" id="mArea" onclick="startMeasure('area')">⬛ Area</button>
+      <button class="btn" onclick="finishMeasure()">✔ Finish</button>
+      <button class="btn" onclick="clearMeasure()">🧹 Clear</button>
+    </div>
+    <h3>Go to coordinates</h3>
+    <div class="row"><input type="text" id="coordIn" placeholder="lat, lng  e.g. 31.4187, 73.0791">
+    <button class="btn" style="width:60px" onclick="goCoords()">Go</button></div>
+    <h3>Drawing</h3>
+    <div class="grid">
+      <button class="btn" onclick="clearDrawn()">🗑 Clear drawings</button>
+      <button class="btn" onclick="zoomTo(drawnItems)">🎯 Zoom drawings</button>
+    </div>
+    <h3>Map</h3>
+    <div class="grid">
+      <button class="btn" onclick="printPDF()">🖨 Print PDF</button>
+      <button class="btn" onclick="copyView()">🔗 Copy view link</button>
+    </div>
+  </div>
+
+  <div class="pane" id="p3">
+    <h3>Import (.zip shapefile / .geojson)</h3>
+    <input type="file" id="fileIn" accept=".zip,.geojson,.json" onchange="importFile(event)">
+    <h3>Imported layers</h3>
+    <div id="layList"><small style="color:var(--mut)">No layers yet</small></div>
+    <h3>Export</h3>
+    <select id="expSrc"></select>
+    <div class="grid" style="margin-top:6px">
+      <button class="btn" onclick="exportData('geojson')">GeoJSON</button>
+      <button class="btn" onclick="exportData('kml')">KML</button>
+      <button class="btn" style="grid-column:span 2" onclick="exportData('shp')">Shapefile ZIP</button>
+    </div>
+  </div>
+</div>
+
+<div id="status">
+  <span>Lat: <b id="sLat">–</b></span><span>Lng: <b id="sLng">–</b></span>
+  <span>Zoom: <b id="sZoom">–</b></span><span id="sBase" style="margin-left:auto"></span>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+function toast(msg, ms = 3500) {
+  const t = $("toast"); t.innerHTML = msg; t.style.display = "block";
+  clearTimeout(toast.h); if (ms) toast.h = setTimeout(() => t.style.display = "none", ms);
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button,.pane").forEach(e => e.classList.remove("on"));
+  b.classList.add("on"); $(b.dataset.t).classList.add("on");
+});
+function toggleSide() { $("side").classList.toggle("hide"); $("btnSide").classList.toggle("on"); }
+function toggleFS() { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+
+/* ---------- basemaps ---------- */
+const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+const gibsURL = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/{time}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
+
+const bases = [
+  { id: "esri", name: "🛰 Esri World Imagery", note: "HD", layer: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri" }) },
+  { id: "s2", name: "🌱 Sentinel-2 Cloudless", note: "10 m", layer: L.tileLayer("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg", { maxZoom: 18, attribution: "Sentinel-2 cloudless by EOX (Copernicus data)" }) },
+  { id: "gibs", name: "🚀 NASA MODIS Daily", note: "250 m", layer: L.tileLayer(gibsURL, { time: yesterday, maxNativeZoom: 9, maxZoom: 14, attribution: "NASA EOSDIS GIBS" }) },
+  { id: "ggl", name: "🌐 Google Satellite Hybrid", note: "unofficial", layer: L.tileLayer("https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", { subdomains: "0123", maxZoom: 20, attribution: "&copy; Google" }) },
+  { id: "osm", name: "🗺 OpenStreetMap", layer: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }) },
+  { id: "topo", name: "⛰ Terrain (OpenTopo)", layer: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 17, attribution: "&copy; OpenTopoMap, OSM" }) },
+  { id: "dark", name: "🌙 Dark Map", layer: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 20, attribution: "&copy; CARTO" }) }
+];
+const overlays = [
+  { id: "lbl", name: "🏷 Place names & borders", layer: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, pane: "overlayPane" }) },
+  { id: "roads", name: "🛣 Roads & transport", layer: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }) },
+  { id: "night", name: "🌃 NASA night lights (VIIRS)", layer: L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png", { maxNativeZoom: 8, maxZoom: 14, opacity: .8, attribution: "NASA GIBS" }) },
+  { id: "hill", name: "🏔 Hillshade relief", layer: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, opacity: .55 }) }
+];
+
+const HOME = { c: [31.4187, 73.0791], z: 12 };
+const map = L.map("map", { center: HOME.c, zoom: HOME.z, layers: [bases[0].layer], maxZoom: 20, zoomControl: false });
+let curBase = bases[0];
+L.control.scale({ imperial: false }).addTo(map);
+function searchPlace() {
+  const q = $("searchIn").value.trim(); if (!q) return;
+  L.Control.Geocoder.nominatim().geocode(q, r => {
+    if (!r.length) return toast("Place not found.");
+    map.fitBounds(r[0].bbox || L.latLngBounds([r[0].center, r[0].center]), { maxZoom: 17 });
+    L.marker(r[0].center).addTo(gpsLayer).bindPopup(r[0].name).openPopup();
+  });
+}
+
+$("baseList").innerHTML = bases.map((b, i) =>
+  `<label class="opt"><input type="radio" name="bm" value="${i}" ${i ? "" : "checked"}>${b.name}<small>${b.note || ""}</small></label>`).join("");
+$("overList").innerHTML = overlays.map((o, i) =>
+  `<label class="opt"><input type="checkbox" data-o="${i}">${o.name}</label>`).join("");
+
+function setBase(i) {
+  map.removeLayer(curBase.layer);
+  curBase = bases[i];
+  curBase.layer.setOpacity?.(+$("opacity").value);
+  curBase.layer.addTo(map).bringToBack();
+  $("gibsBox").style.display = curBase.id === "gibs" ? "block" : "none";
+  $("sBase").textContent = curBase.name;
+}
+document.querySelectorAll("[name=bm]").forEach(r => r.onchange = () => setBase(+r.value));
+document.querySelectorAll("[data-o]").forEach(c => c.onchange = () => {
+  const l = overlays[c.dataset.o].layer; c.checked ? l.addTo(map) : map.removeLayer(l);
+});
+$("opacity").oninput = e => curBase.layer.setOpacity(+e.target.value);
+$("gibsDate").value = yesterday; $("gibsDate").max = yesterday;
+$("gibsDate").onchange = e => { const g = bases[2].layer; g.options.time = e.target.value; g.redraw(); };
+$("sBase").textContent = curBase.name;
+
+/* ---------- status bar ---------- */
+map.on("mousemove", e => { $("sLat").textContent = e.latlng.lat.toFixed(5); $("sLng").textContent = e.latlng.lng.toFixed(5); });
+map.on("zoomend", () => $("sZoom").textContent = map.getZoom()); $("sZoom").textContent = map.getZoom();
+
+/* ---------- draw tools ---------- */
+const drawnItems = new L.FeatureGroup().addTo(map);
+let activeDraw = null, editOn = false, delOn = false;
+function stopTools() {
+  if (activeDraw) { activeDraw.disable(); activeDraw = null; }
+  if (editOn) toggleEdit();
+  if (delOn) toggleDelete();
+}
+function startDraw(type) {
+  finishMeasure(true); stopTools();
+  activeDraw = new L.Draw[type](map, { shapeOptions: { color: "#E63946", weight: 3 } });
+  activeDraw.enable();
+}
+function toggleEdit() {
+  if (!editOn) { finishMeasure(true); if (activeDraw) { activeDraw.disable(); activeDraw = null; } if (delOn) toggleDelete(); }
+  editOn = !editOn;
+  drawnItems.eachLayer(l => l.editing && (editOn ? l.editing.enable() : l.editing.disable()));
+  $("btnEdit").classList.toggle("on", editOn);
+  if (!editOn) refreshSources(); else toast("Drag the handles to edit shapes. Click Edit again to finish.", 4000);
+}
+function toggleDelete() {
+  if (!delOn) { finishMeasure(true); if (activeDraw) { activeDraw.disable(); activeDraw = null; } if (editOn) toggleEdit(); }
+  delOn = !delOn;
+  $("btnDel").classList.toggle("on", delOn);
+  if (delOn) toast("Click a drawn shape to delete it. Click Delete again to stop.", 4000);
+}
+drawnItems.on("click", e => { if (delOn) { drawnItems.removeLayer(e.layer); refreshSources(); } });
+map.on("draw:created", e => {
+  drawnItems.addLayer(e.layer);
+  if (e.layerType === "circle") e.layer.feature = { type: "Feature", properties: { radius_m: e.layer.getRadius() }, geometry: { type: "Point", coordinates: [e.layer.getLatLng().lng, e.layer.getLatLng().lat] } };
+  refreshSources();
+});
+map.on("draw:deleted draw:edited", refreshSources);
+function clearDrawn() { drawnItems.clearLayers(); refreshSources(); }
+function zoomTo(g) { const b = g.getBounds(); b.isValid() ? map.fitBounds(b, { padding: [30, 30] }) : toast("Nothing to zoom to."); }
+
+/* ---------- GPS / navigation ---------- */
+let gpsLayer = L.layerGroup().addTo(map);
+function gpsLocate() { if (!navigator.geolocation) return toast("Geolocation not supported."); map.locate({ setView: true, maxZoom: 17, enableHighAccuracy: true }); }
+map.on("locationfound", e => {
+  gpsLayer.clearLayers();
+  L.marker(e.latlng).addTo(gpsLayer).bindPopup("📍 You are within " + Math.round(e.accuracy) + " m").openPopup();
+  L.circle(e.latlng, { radius: e.accuracy, color: "#E63946", fillOpacity: .08 }).addTo(gpsLayer);
+});
+map.on("locationerror", () => toast("Location blocked. Allow permission and use HTTPS or localhost."));
+function goHome() { map.setView(HOME.c, HOME.z); }
+function goCoords() {
+  const m = $("coordIn").value.split(/[,\s]+/).map(Number).filter(n => !isNaN(n));
+  if (m.length < 2 || Math.abs(m[0]) > 90 || Math.abs(m[1]) > 180) return toast("Enter valid: lat, lng");
+  map.setView([m[0], m[1]], 16); L.marker([m[0], m[1]]).addTo(gpsLayer).bindPopup(m[0] + ", " + m[1]).openPopup();
+}
+function copyView() {
+  const c = map.getCenter(), t = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} (zoom ${map.getZoom()})`;
+  navigator.clipboard?.writeText(t).then(() => toast("Copied: " + t), () => toast(t));
+}
+
+/* ---------- measure ---------- */
+let mode = null, pts = [], mGroup = L.layerGroup().addTo(map), shape = null;
+const fmtLen = m => m >= 1000 ? (m / 1000).toFixed(2) + " km" : m.toFixed(1) + " m";
+function sphArea(ll) {
+  let s = 0; const r = Math.PI / 180;
+  ll.forEach((a, i) => { const b = ll[(i + 1) % ll.length]; s += (b.lng - a.lng) * r * (2 + Math.sin(a.lat * r) + Math.sin(b.lat * r)); });
+  return Math.abs(s * 6378137 * 6378137 / 2);
+}
+const fmtArea = a => `${a.toFixed(0)} m² · ${(a / 1e4).toFixed(2)} ha · ${(a / 1e6).toFixed(4)} km² · ${(a / 4046.856).toFixed(2)} acres`;
+function startMeasure(m) {
+  finishMeasure(true); mode = m; pts = [];
+  $("mDist").classList.toggle("on", m === "dist"); $("mArea").classList.toggle("on", m === "area");
+  map.getContainer().style.cursor = "crosshair";
+  toast(`Click on the map to add points. Press <b>Finish</b> when done.`, 5000);
+}
+function update() {
+  if (shape) mGroup.removeLayer(shape);
+  const o = { color: "#E63946", weight: 3, dashArray: "6 4", fillOpacity: .15 };
+  shape = mode === "area" && pts.length > 2 ? L.polygon(pts, o) : L.polyline(pts, o);
+  shape.addTo(mGroup);
+  if (mode === "dist") { let d = 0; pts.forEach((p, i) => i && (d += p.distanceTo(pts[i - 1]))); toast("📏 " + fmtLen(d), 0); }
+  else if (pts.length > 2) toast("⬛ " + fmtArea(sphArea(pts)), 0);
+}
+map.on("click", e => {
+  if (!mode) return;
+  pts.push(e.latlng);
+  L.circleMarker(e.latlng, { radius: 4, color: "#fff", fillColor: "#E63946", fillOpacity: 1 }).addTo(mGroup);
+  update();
+});
+function finishMeasure(silent) {
+  if (mode && pts.length > 1 && !silent) toast($("toast").innerHTML, 8000);
+  mode = null; pts = []; shape = null;
+  map.getContainer().style.cursor = "";
+  $("mDist").classList.remove("on"); $("mArea").classList.remove("on");
+}
+function clearMeasure() { finishMeasure(true); mGroup.clearLayers(); $("toast").style.display = "none"; }
+
+/* ---------- import ---------- */
+const imported = []; // {name, group}
+const palette = ["#E63946", "#2A9DF4", "#F4A261", "#2ECC71", "#B565D9", "#FFD166"];
+function attrPopup(f, l) {
+  const p = f.properties || {}, k = Object.keys(p);
+  if (k.length) l.bindPopup(`<table class="popup-tbl">${k.map(x => `<tr><td><b>${x}</b></td><td>${p[x]}</td></tr>`).join("")}</table>`, { maxHeight: 250 });
+}
+function addGeoJSON(data, name) {
+  const col = palette[imported.length % palette.length];
+  const g = L.geoJSON(data, {
+    style: { color: col, weight: 2, fillOpacity: .2 },
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: col, fillColor: col, fillOpacity: .8 }),
+    onEachFeature: attrPopup
+  });
+  if (!g.getLayers().length) throw new Error("empty");
+  g.addTo(map); imported.push({ name, group: g }); zoomTo(g); renderLayers();
+}
+async function importFile(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  const n = f.name.toLowerCase();
+  try {
+    if (n.endsWith(".zip")) {
+      const r = await shp(await f.arrayBuffer());
+      (Array.isArray(r) ? r : [r]).forEach(d => addGeoJSON(d, (d.fileName || f.name.replace(/\.zip$/i, ""))));
+    } else addGeoJSON(JSON.parse(await f.text()), f.name.replace(/\.\w+$/, ""));
+    toast("✅ Imported: " + f.name);
+  } catch (e) { console.error(e); toast("❌ Could not import. ZIP needs .shp, .shx, .dbf (+ .prj)."); }
+  ev.target.value = "";
+}
+function renderLayers() {
+  $("layList").innerHTML = imported.length ? imported.map((l, i) =>
+    `<div class="lay"><input type="checkbox" checked onchange="toggleLay(${i},this.checked)"><span>${l.name}</span>
+     <button title="Zoom" onclick="zoomTo(imported[${i}].group)">🎯</button><button title="Remove" onclick="removeLay(${i})">✖</button></div>`).join("")
+    : '<small style="color:var(--mut)">No layers yet</small>';
+  refreshSources();
+}
+function toggleLay(i, on) { on ? imported[i].group.addTo(map) : map.removeLayer(imported[i].group); }
+function removeLay(i) { map.removeLayer(imported[i].group); imported.splice(i, 1); renderLayers(); }
+function refreshSources() {
+  $("expSrc").innerHTML = `<option value="d">✏️ Drawn features (${drawnItems.getLayers().length})</option>` +
+    imported.map((l, i) => `<option value="${i}">📂 ${l.name}</option>`).join("");
+}
+refreshSources();
+
+/* ---------- export ---------- */
+function exportData(fmt) {
+  const v = $("expSrc").value;
+  const gj = v === "d" ? drawnItems.toGeoJSON() : imported[v].group.toGeoJSON();
+  const name = v === "d" ? "drawn" : imported[v].name.replace(/\W+/g, "_");
+  if (!gj.features.length) return toast("No features to export.");
+  if (fmt === "geojson") saveAs(new Blob([JSON.stringify(gj, null, 2)], { type: "application/geo+json" }), name + ".geojson");
+  else if (fmt === "kml") saveAs(new Blob([tokml(gj)], { type: "application/vnd.google-earth.kml+xml" }), name + ".kml");
+  else try { shpwrite.download(gj, { folder: name, types: { point: name + "_points", polygon: name + "_polygons", line: name + "_lines" } }); }
+  catch (e) { console.error(e); toast("Shapefile export failed."); }
+}
+function printPDF() {
+  const { jsPDF } = window.jspdf, pdf = new jsPDF(), c = map.getCenter();
+  pdf.setFontSize(18); pdf.text("WebGIS Pro – Map Report", 20, 20);
+  pdf.setFontSize(11);
+  [`Date: ${new Date().toLocaleString()}`, `Basemap: ${curBase.name.replace(/[^\x20-\x7E]/g, "").trim()}`,
+   `Center: ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`, `Zoom: ${map.getZoom()}`,
+   `Drawn features: ${drawnItems.getLayers().length}`, `Imported layers: ${imported.length}`]
+    .forEach((t, i) => pdf.text(t, 20, 34 + i * 8));
+  pdf.save("WebGIS_Report.pdf");
+}
+</script>
+</body>
+</html>
